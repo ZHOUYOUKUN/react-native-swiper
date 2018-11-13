@@ -91,7 +91,8 @@ const styles = {
 
   buttonText: {
     fontSize: 50,
-    color: '#007aff'
+    color: '#007aff',
+    fontFamily: 'Arial'
   }
 }
 
@@ -192,6 +193,24 @@ export default class extends Component {
   autoplayTimer = null
   loopJumpTimer = null
 
+  componentWillMount () {
+    if (Platform.OS !== 'ios') {
+      const shouldSetResponder = (evt, gestureState) => this.props.horizontal
+        && (Math.abs(gestureState.vx) > Math.abs(gestureState.vy));
+      this._panResponder = PanResponder.create({
+        onStartShouldSetPanResponder: shouldSetResponder,
+        onStartShouldSetPanResponderCapture: shouldSetResponder,
+        onMoveShouldSetPanResponder: shouldSetResponder,
+        onMoveShouldSetPanResponderCapture: shouldSetResponder,
+        onPanResponderRelease: () => false,
+        onPanResponderTerminate: () => false,
+        // blocking nativeResponder makes it hard to scroll ViewPagerAndroid in a ScrollView
+        // I don't know how it works since I know little about java, but it did work in my case
+        onShouldBlockNativeResponder: () => false,
+      })
+    }
+  }
+
   componentWillReceiveProps (nextProps) {
     if (!nextProps.autoplay && this.autoplayTimer) clearTimeout(this.autoplayTimer)
     this.setState(this.initState(nextProps, this.props.index !== nextProps.index))
@@ -252,12 +271,25 @@ export default class extends Component {
     }
 
     initState.offset[initState.dir] = initState.dir === 'y'
-      ? height * props.index
-      : width * props.index
+      ? height * initState.index
+      : width * initState.index;
 
+    // fix render last page first when loop = true
+    if (props.loop) {
+      initState.offset[initState.dir] = initState.dir === 'y'
+          ? height * (initState.index + 1)
+        : width * (initState.index + 1);
+    }
+
+    if (state.total === initState.total && !props.updateIndex) {
+      // retain the offset
+      initState.offset = this.internals.offset;
+    }
 
     this.internals = {
       ...this.internals,
+      // update offset
+      offset: { ...initState.offset },
       isScrolling: false
     };
     return initState
